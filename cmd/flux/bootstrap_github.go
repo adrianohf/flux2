@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/spf13/cobra"
 
@@ -204,16 +205,13 @@ func bootstrapGitHubCmdRun(cmd *cobra.Command, args []string) error {
 	if bootstrapArgs.tokenAuth {
 		secretOpts.Username = "git"
 		secretOpts.Password = ghToken
-
-		if bootstrapArgs.caFile != "" {
-			secretOpts.CAFilePath = bootstrapArgs.caFile
-		}
+		secretOpts.CAFile = caBundle
 	} else {
 		secretOpts.PrivateKeyAlgorithm = sourcesecret.PrivateKeyAlgorithm(bootstrapArgs.keyAlgorithm)
 		secretOpts.RSAKeyBits = int(bootstrapArgs.keyRSABits)
 		secretOpts.ECDSACurve = bootstrapArgs.keyECDSACurve.Curve
-		secretOpts.SSHHostname = githubArgs.hostname
 
+		secretOpts.SSHHostname = githubArgs.hostname
 		if bootstrapArgs.sshHostname != "" {
 			secretOpts.SSHHostname = bootstrapArgs.sshHostname
 		}
@@ -232,6 +230,19 @@ func bootstrapGitHubCmdRun(cmd *cobra.Command, args []string) error {
 		RecurseSubmodules: bootstrapArgs.recurseSubmodules,
 	}
 
+	// Read PGP Key
+	var entityList openpgp.EntityList
+	if bootstrapArgs.gpgKeyRingPath != "" {
+		r, err := os.Open(bootstrapArgs.gpgKeyRingPath)
+		if err != nil {
+			return fmt.Errorf("unable to open GPG key ring: %w", err)
+		}
+		entityList, err = openpgp.ReadKeyRing(r)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Bootstrap config
 	bootstrapOpts := []bootstrap.GitProviderOption{
 		bootstrap.WithProviderRepository(githubArgs.owner, githubArgs.repository, githubArgs.personal),
@@ -244,7 +255,7 @@ func bootstrapGitHubCmdRun(cmd *cobra.Command, args []string) error {
 		bootstrap.WithKubeconfig(kubeconfigArgs, kubeclientOptions),
 		bootstrap.WithLogger(logger),
 		bootstrap.WithCABundle(caBundle),
-		bootstrap.WithGitCommitSigning(bootstrapArgs.gpgKeyRingPath, bootstrapArgs.gpgPassphrase, bootstrapArgs.gpgKeyID),
+		bootstrap.WithGitCommitSigning(entityList, bootstrapArgs.gpgPassphrase, bootstrapArgs.gpgKeyID),
 	}
 	if bootstrapArgs.sshHostname != "" {
 		bootstrapOpts = append(bootstrapOpts, bootstrap.WithSSHHostname(bootstrapArgs.sshHostname))

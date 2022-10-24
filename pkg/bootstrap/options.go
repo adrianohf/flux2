@@ -19,6 +19,7 @@ package bootstrap
 import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
 	runclient "github.com/fluxcd/pkg/runtime/client"
 
 	"github.com/fluxcd/flux2/pkg/bootstrap/git"
@@ -131,22 +132,22 @@ func (o loggerOption) applyGitProvider(b *GitProviderBootstrapper) {
 	b.logger = o.logger
 }
 
-func WithGitCommitSigning(path, passphrase, keyID string) Option {
+func WithGitCommitSigning(gpgKeyRing openpgp.EntityList, passphrase, keyID string) Option {
 	return gitCommitSigningOption{
-		gpgKeyRingPath: path,
-		gpgPassphrase:  passphrase,
-		gpgKeyID:       keyID,
+		gpgKeyRing:    gpgKeyRing,
+		gpgPassphrase: passphrase,
+		gpgKeyID:      keyID,
 	}
 }
 
 type gitCommitSigningOption struct {
-	gpgKeyRingPath string
-	gpgPassphrase  string
-	gpgKeyID       string
+	gpgKeyRing    openpgp.EntityList
+	gpgPassphrase string
+	gpgKeyID      string
 }
 
 func (o gitCommitSigningOption) applyGit(b *PlainGitBootstrapper) {
-	b.gpgKeyRingPath = o.gpgKeyRingPath
+	b.gpgKeyRing = o.gpgKeyRing
 	b.gpgPassphrase = o.gpgPassphrase
 	b.gpgKeyID = o.gpgKeyID
 }
